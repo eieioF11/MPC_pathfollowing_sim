@@ -4,6 +4,7 @@ import math
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.transforms import Affine2D
+import time
 from mpc import *
 import time
 
@@ -47,16 +48,9 @@ def drawRobo(ax,x,y,yaw):
     body = relative_rectangle(size,size, to_body_center_tf, edgecolor='black',fill=False)
     ax.add_patch(body)
     return body
-
-def main():
-    mpc = MPC()
-    robo=model()
-    robo.x=inipos[0]
-    robo.y=inipos[1]
-    robo.yaw=inipos[2]
-    x=[robo.x]
-    y=[robo.y]
+def runMPC(robo,mpc,x,y,t):
     w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
+    #w_opt, tgrid = mpc.Solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path,dt)
     # 解をプロット
     x1_opt = np.array(w_opt[0::6])
     x2_opt = np.array(w_opt[1::6])
@@ -77,49 +71,35 @@ def main():
     plt.grid()
     plt.plot(path[:,0],path[:,1],c="b")
     plt.plot(x1_opt, x2_opt, '.',c="g")
-    robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
-    x.append(robo.x)
-    y.append(robo.y)
     plt.xlabel('x')
     plt.ylabel('y')
     plt.plot(x,y,c="r")
+    plt.legend(['Path','Horizon','Robot Path'])
     body=drawRobo(ax,robo.x,robo.y,robo.yaw)
-    plt.pause(5)
+    robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
+    x.append(robo.x)
+    y.append(robo.y)
+    if t==-1:
+        plt.show()
+    else:
+        plt.pause(t)
     body.remove()
+
+def main():
+    mpc = MPC()
+    robo=model()
+    robo.x=inipos[0]
+    robo.y=inipos[1]
+    robo.yaw=inipos[2]
+    x=[robo.x]
+    y=[robo.y]
+    runMPC(robo,mpc,x,y,5)
     while True:
         d=math.sqrt((path[-1,0]-robo.x)**2+(path[-1,1]-robo.y)**2)
+        runMPC(robo,mpc,x,y,0.01)
         if d<=0.01:
+            runMPC(robo,mpc,x,y,-1)
             break
-        w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
-        # 解をプロット
-        x1_opt = np.array(w_opt[0::6])
-        x2_opt = np.array(w_opt[1::6])
-        x3_opt = np.array(w_opt[2::6])
-        u1_opt = np.array(w_opt[3::6])
-        u2_opt = np.array(w_opt[4::6])
-        u3_opt = np.array(w_opt[5::6])
-        plt.clf()
-        plt.subplot(1, 2, 1)
-        plt.grid()
-        plt.step(tgrid, np.array(vertcat(DM.nan(1), u1_opt)), '-.')
-        plt.step(tgrid, np.array(vertcat(DM.nan(1), u2_opt)), '-.')
-        plt.step(tgrid, np.array(vertcat(DM.nan(1), u3_opt)), '-.')
-        plt.xlabel('t')
-        plt.legend(['vx','vy','angular'])
-        ax=plt.subplot(1, 2, 2)
-        ax.set_aspect('equal')
-        plt.grid()
-        plt.plot(path[:,0],path[:,1],c="b")
-        plt.plot(x1_opt, x2_opt, '.',c="g")
-        robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
-        x.append(robo.x)
-        y.append(robo.y)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.plot(x,y,c="r")
-        body=drawRobo(ax,robo.x,robo.y,robo.yaw)
-        plt.pause(0.01)
-        body.remove()
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ class MPC(object):
     def __init__(self):
         pass
 
-    def cost(self,inipos,iniv,path):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
+    def cost(self,inipos,iniv,path,dt):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
         J = 0 # コスト関数
         for k in range(self.N):
             Uk = MX.sym('U_' + str(k), self.nu) # 時間ステージ k の制御入力 uk を表す変数
@@ -42,12 +42,12 @@ class MPC(object):
                 L += 0.5 * self.Q[i] * (self.Xk[i]-x_ref[i])**2
             for i in range(self.nu):
                 L += 0.5 * self.R[i] * Uk[i]**2
-            J = J + L * self.dt # コスト関数にステージコストを追加
+            J = J + L * dt # コスト関数にステージコストを追加
 
             # Forward Euler による離散化状態方程式
-            Xk_next = vertcat(x + vx * self.dt,
-                            y + vy * self.dt,
-                            yaw + angular * self.dt)
+            Xk_next = vertcat(x + vx * dt,
+                            y + vy * dt,
+                            yaw + angular * dt)
             Xk1 = MX.sym('X_' + str(k+1), self.nx)  # 時間ステージ k+1 の状態 xk+1 を表す変数
             self.w   += [Xk1]                       # xk+1 を最適化変数 list に追加
             self.lbw += [-inf, -inf, -inf]    # xk+1 の lower-bound （指定しない要素は -inf）
@@ -68,7 +68,10 @@ class MPC(object):
             Vf += 0.5 * self.R[i] * Uk[i]**2
         J = J + Vf
         return J
-    def solve(self,inipos,iniv,path):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
+    def solve(self,inipos,iniv,path):
+        w_opt, tgrid = self.Solve(inipos,iniv,path,self.dt)
+        return w_opt, tgrid
+    def Solve(self,inipos,iniv,path,dt):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
         # 以下で非線形計画問題(NLP)を定式化
         self.w   = []  # 最適化変数を格納する list
         self.w0  = []  # 最適化変数(w)の初期推定解を格納する list
@@ -95,7 +98,7 @@ class MPC(object):
             path_.append(path[-1,:])
         path_=np.array(path_)
         #評価関数式作成
-        J=self.cost(inipos,iniv,path_)
+        J=self.cost(inipos,iniv,path_,dt)
         # 非線形計画問題(NLP)
         nlp = {'f': J, 'x': vertcat(*self.w), 'g': vertcat(*self.g)}
         # Ipopt ソルバー，最小バリアパラメータを0.001に設定
