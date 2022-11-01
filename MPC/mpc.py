@@ -10,20 +10,32 @@ class MPC(object):
     dt = T / N  # 離散化ステップ
     nx = 3      # 状態空間の次元
     nu = 3      # 制御入力の次元
-    Vmax = 2.0
+    Vmax = 1.0
+    Angularmax = 1.0
     #重み
     Q = [1.0, 1.0, 0.01] # 状態への重み
     R = [1.0, 1.0, 1.0]  # 制御入力への重み
+    inipos=[]
+    path=[]
+
     def __init__(self):
         pass
+    def __init__(self,T,N,Vmax,Angularmax):
+        self.T=T
+        self.N=N
+        self.Vmax=Vmax
+        self.Angularmax=Angularmax
+
 
     def cost(self,inipos,iniv,path):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
         J = 0 # コスト関数
         for k in range(self.N):
             Uk = MX.sym('U_' + str(k), self.nu) # 時間ステージ k の制御入力 uk を表す変数
             self.w   += [Uk]                    # uk を最適化変数 list に追加
-            self.lbw += [-self.Vmax,-self.Vmax,-self.Vmax]        # uk の lower-bound
-            self.ubw += [self.Vmax,self.Vmax,self.Vmax]           # uk の upper-bound
+            #制御入力の制約条件
+            self.lbw += [-self.Vmax,-self.Vmax,-self.Angularmax]        # uk の lower-bound
+            self.ubw += [self.Vmax,self.Vmax,self.Angularmax]           # uk の upper-bound
+
             self.w0  += iniv                 # uk の初期推定解
 
             #運動方程式
@@ -54,8 +66,7 @@ class MPC(object):
             self.ubw += [inf, inf, inf]       # xk+1 の upper-bound （指定しない要素は inf）
             self.w0  += inipos       # xk+1 の初期推定解
 
-            # 状態方程式(xk+1=xk+fk*dt) を等式制約として導入
-            self.g   += [Xk_next-Xk1]
+            self.g   += [Xk_next-Xk1] # 状態方程式(xk+1=xk+fk*dt) を等式制約として導入
             self.lbg += [0.0,0.0,0.0] # 等式制約は lower-bound と upper-bound を同じ値にすることで設定
             self.ubg += [0.0,0.0,0.0] # 等式制約は lower-bo und と upper-bound を同じ値にすることで設定
             self.Xk = Xk1
@@ -69,6 +80,8 @@ class MPC(object):
         J = J + Vf
         return J
     def solve(self,inipos,iniv,path):#inipos=[x0,y0,yaw0] path=[[x,y,yaw],...]
+        self.inipos=inipos
+        self.path=path
         # 以下で非線形計画問題(NLP)を定式化
         self.w   = []  # 最適化変数を格納する list
         self.w0  = []  # 最適化変数(w)の初期推定解を格納する list
@@ -107,6 +120,14 @@ class MPC(object):
         print(self.k_max)
         tgrid = np.array([self.dt*k for k in range(self.k_max+1)])
         return w_opt, tgrid
+
+    def goal_check(self,lim,alim):
+        d=math.sqrt((self.path[-1,0]-self.inipos[0])**2+(self.path[-1,1]-self.inipos[1])**2)
+        print(d,math.fabs(self.path[-1,2]-self.inipos[2]))
+        if d<lim:
+            if math.fabs(self.path[-1,2]-self.inipos[2])<alim:
+                return True
+        return False
 
 # 目標状態(経路)
 path = []

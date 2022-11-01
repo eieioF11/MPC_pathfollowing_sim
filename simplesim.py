@@ -49,13 +49,14 @@ def drawRobo(ax,x,y,yaw):
     return body
 
 def main():
-    mpc = MPC()
+    mpc = MPC(30.0,10,0.5,0.2)
     robo=model()
     robo.x=inipos[0]
     robo.y=inipos[1]
     robo.yaw=inipos[2]
     x=[robo.x]
     y=[robo.y]
+
     w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
     # 解をプロット
     x1_opt = np.array(w_opt[0::6])
@@ -86,37 +87,41 @@ def main():
     body=drawRobo(ax,robo.x,robo.y,robo.yaw)
     plt.pause(5)
     body.remove()
+
     while True:
-        d=math.sqrt((path[-1,0]-robo.x)**2+(path[-1,1]-robo.y)**2)
-        if d<=0.01:
+        if mpc.goal_check(0.01,0.1):#収束判定
             break
+        #最適化処理
         w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
         # 解をプロット
-        x1_opt = np.array(w_opt[0::6])
-        x2_opt = np.array(w_opt[1::6])
-        x3_opt = np.array(w_opt[2::6])
-        u1_opt = np.array(w_opt[3::6])
-        u2_opt = np.array(w_opt[4::6])
-        u3_opt = np.array(w_opt[5::6])
+        x1_opt = np.array(w_opt[0::6])#x
+        x2_opt = np.array(w_opt[1::6])#y
+        x3_opt = np.array(w_opt[2::6])#yaw
+        u1_opt = np.array(w_opt[3::6])#vx
+        u2_opt = np.array(w_opt[4::6])#vy 対向２輪なので常に0
+        u3_opt = np.array(w_opt[5::6])#angular
+        #グラフ描画
         plt.clf()
         plt.subplot(1, 2, 1)
         plt.grid()
         plt.step(tgrid, np.array(vertcat(DM.nan(1), u1_opt)), '-.')
-        plt.step(tgrid, np.array(vertcat(DM.nan(1), u2_opt)), '-.')
         plt.step(tgrid, np.array(vertcat(DM.nan(1), u3_opt)), '-.')
         plt.xlabel('t')
-        plt.legend(['vx','vy','angular'])
+        plt.legend(['vx','angular'])
         ax=plt.subplot(1, 2, 2)
         ax.set_aspect('equal')
         plt.grid()
         plt.plot(path[:,0],path[:,1],c="b")
         plt.plot(x1_opt, x2_opt, '.',c="g")
+        #モデル更新
         robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
         x.append(robo.x)
         y.append(robo.y)
+        #ロボット軌道表示
         plt.xlabel('x')
         plt.ylabel('y')
         plt.plot(x,y,c="r")
+        #ロボット表示
         body=drawRobo(ax,robo.x,robo.y,robo.yaw)
         plt.pause(0.01)
         body.remove()
