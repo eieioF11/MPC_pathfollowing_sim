@@ -9,15 +9,13 @@ import time
 
 # 目標状態(経路)
 path = []
-for i in range(40):
-    path.append([i,50*cos(i*0.1),math.pi/4])
-for i in range(40,80):
-    path.append([i,50*cos(i*0.1),math.pi/2])
-for i in range(80,100):
-    path.append([i,50*cos(i*0.1),math.pi])
+def f(x):
+    return 2*sin(x*0.1)
+for i in np.arange(0,50):
+    path.append([i*0.05,f(i),0.0])
 path=np.array(path)
 #初期位置
-inipos=[0.0,100.0,0.0]
+inipos=[0.0,0.0,0.0]
 
 class model(object):
     def __init__(self):
@@ -36,7 +34,7 @@ class model(object):
         self.w=w
 
 def drawRobo(ax,x,y,yaw):
-    size = 10.0
+    size = 1.0
     #描画更新
     def relative_rectangle(w: float, h: float, center_tf, **kwargs):
         rect_origin_to_center = Affine2D().translate(w / 2, h / 2)
@@ -49,50 +47,28 @@ def drawRobo(ax,x,y,yaw):
     return body
 
 def main():
-    mpc = MPC(30.0,10,0.5,0.2)
+    mpc = MPC(2.0,0.01,1.0,2.0)
     robo=model()
     robo.x=inipos[0]
     robo.y=inipos[1]
     robo.yaw=inipos[2]
     x=[robo.x]
     y=[robo.y]
-
-    w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
-    # 解をプロット
-    x1_opt = np.array(w_opt[0::6])
-    x2_opt = np.array(w_opt[1::6])
-    x3_opt = np.array(w_opt[2::6])
-    u1_opt = np.array(w_opt[3::6])
-    u2_opt = np.array(w_opt[4::6])
-    u3_opt = np.array(w_opt[5::6])
-    plt.clf()
-    plt.subplot(1, 2, 1)
-    plt.grid()
-    plt.step(tgrid, np.array(vertcat(DM.nan(1), u1_opt)), '-.')
-    plt.step(tgrid, np.array(vertcat(DM.nan(1), u2_opt)), '-.')
-    plt.step(tgrid, np.array(vertcat(DM.nan(1), u3_opt)), '-.')
-    plt.xlabel('t')
-    plt.legend(['vx','vy','angular'])
-    ax=plt.subplot(1, 2, 2)
-    ax.set_aspect('equal')
-    plt.grid()
-    plt.plot(path[:,0],path[:,1],c="b")
-    plt.plot(x1_opt, x2_opt, '.',c="g")
-    robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
-    x.append(robo.x)
-    y.append(robo.y)
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.plot(x,y,c="r")
-    body=drawRobo(ax,robo.x,robo.y,robo.yaw)
-    plt.pause(5)
-    body.remove()
-
+    t_path=mpc.conversion_path(path)
+    #t=np.arange(0,len(t_path))
+    #plt.plot(t,t_path[:,0],c="r")
+    #plt.plot(t,t_path[:,1],c="g")
+    #plt.plot(t,t_path[:,2],c="b")
+    #plt.plot(t,t_path[:,3],c="m")
+    #plt.plot(t,t_path[:,5],c="y")
+    #plt.grid()
+    #plt.show()
+    w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],t_path)
     while True:
-        if mpc.goal_check(0.01,0.1):#収束判定
+        if mpc.goal_check(0.1,0.1):#収束判定
             break
         #最適化処理
-        w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],path)
+        w_opt, tgrid = mpc.solve([robo.x,robo.y,robo.yaw],[robo.vx,robo.vy,robo.w],t_path)
         # 解をプロット
         x1_opt = np.array(w_opt[0::6])#x
         x2_opt = np.array(w_opt[1::6])#y
@@ -110,11 +86,13 @@ def main():
         plt.legend(['vx','angular'])
         ax=plt.subplot(1, 2, 2)
         ax.set_aspect('equal')
+        plt.xlim(-1,9)
+        plt.ylim(-5,5)
         plt.grid()
         plt.plot(path[:,0],path[:,1],c="b")
         plt.plot(x1_opt, x2_opt, '.',c="g")
         #モデル更新
-        robo.update(u1_opt[0],u2_opt[0],u3_opt[0],mpc.dt)
+        robo.update(u1_opt[1],u2_opt[1],u3_opt[1],mpc.dt)
         x.append(robo.x)
         y.append(robo.y)
         #ロボット軌道表示
